@@ -1,0 +1,65 @@
+Solution Outline:
+
+1. Minimum speed at top of loop
+   For a car of mass m to "just stay on the track" at the top of a vertical loop of radius r, the normal force there goes to zero and weight supplies exactly the centripetal force:
+   [
+   mg = mv²/r => v_min = √(rg).
+   ]
+   With r=5.0 m and g ≈ 9.8 m/s², one finds
+   [
+   v_min = √(5.0×9.8) = 7.0 m/s.
+   ]
+
+2. Minimum launch height H
+   From energy conservation (assuming no friction), the car must arrive at the top of the loop (which is 14 m above the ground in the figure) with at least 7.0 m/s. At the top, its total energy is
+   [
+   E_top = mg(14) + ½mv_min².
+   ]
+   Hence the required initial potential energy is
+   [
+   mgH = mg(14) + ½m(7.0)².
+   ]
+   Numerically,
+   [
+   mg(14) = 1000×9.8×14 = 137,200 J,
+   ½m(7.0)² = ½×1000×49 = 24,500 J.
+   ]
+   So
+   [
+   mgH = 137,200 + 24,500 = 161,700 J
+   => 1000×9.8×H = 161,700
+   => H ≈ 16.5 m.
+   ]
+
+3. Compression of the emergency spring
+   If the brakes fail when the car is up on the right side at height 14 m, it will roll forward and convert its gravitational potential energy mg(14) into spring potential ½kx². Thus,
+   [
+   mg(14) = ½kx²,
+   ]
+   with k=1.4×10⁴ N/m. Numerically,
+   [
+   mg(14) = 1000×9.8×14 = 137,200 J,
+   ]
+   and
+   [
+   137,200 = ½(1.4×10⁴)x² = 7000x²
+   => x² = 137,200/7000 = 19.6
+   => x ≈ 4.4 m.
+   ]
+
+Answers:
+
+a) The minimum speed at the top of the loop so the car does not fall off is 
+[
+7.0 m/s.
+]
+
+b) The minimum height H above the ground to ensure the car stays on the track is 
+[
+16.5 m (approximately).
+]
+
+c) If the brakes fail when the car is at 14 m on the right side, it will compress the spring by about
+[
+4.4 m.
+]

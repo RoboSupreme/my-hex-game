@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Hex Adventure Web UI</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <h1>Hex Adventure Web UI</h1>
+    
+    <div id="statusSection">
+      <div class="section-header">
+        <h2>Player Status</h2>
+        <button id="toggleStats" class="toggle-button">Toggle Stats</button>
+      </div>
+      <div id="playerStatus" class="stats-visible">
+        <!-- JS will fill this in dynamically -->
+      </div>
+    </div>
+
+    <div id="actionsSection">
+      <h2>Possible Actions</h2>
+      <div id="actionsContainer">
+        <!-- JS will fill in clickable buttons here -->
+      </div>
+    </div>
+
+    <div id="askSection">
+      <h2>Ask the Spirit</h2>
+      <input type="text" id="askInput" placeholder="Ask about the world (e.g. 'ask: Where am I?')">
+      <button id="askButton">Ask</button>
+    </div>
+
+    <hr />
+
+    <div id="output">
+      <h2>Game Output</h2>
+      <div id="outputLog"><!-- Narrative log goes here --></div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+  </body>
+</html>
