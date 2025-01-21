@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 test_game.py
 
@@ -10,20 +11,34 @@ from hex_game_engine import HexGameEngine
 def test_game():
     engine = HexGameEngine(db_path="game.db")
 
-    print("=== Checking possible actions at start ===")
-    actions = engine.get_possible_actions()
-    print("Actions =>", actions)
+    def show_stats():
+        p = engine.get_player_state()
+        print("\nCurrent Stats:")
+        print(f"Combat: Attack {p['attack']}, Defense {p['defense']}, Agility {p['agility']}")
+        print(f"Resources: Money {p['money']}, Health {p['health']}")
+        print(f"Needs: Hunger {p['hunger']}, Energy {p['energy']}, Thirst {p['thirst']}")
+        print(f"Alignment: {p['alignment']}/100")
+        ### TIME FEATURE ADDED ###
+        # Convert month to string if you like, or just show numeric
+        month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        month_str = month_names[(p['time_month']-1) % 12]
+        print(f"Time: Year {p['time_year']} AC, {month_str} {p['time_day']}th, {p['time_hour']}:00")
+        print(f"Location: {p['location_name']} at ({p['q']}, {p['r']})")
+        if p['place_name']:
+            print(f"Inside: {p['place_name']}")
 
-    if actions:
-        # pick the first action and apply
-        print("Applying action:", actions[0])
-        outcome = engine.apply_action(actions[0])
-        print("Outcome =>", outcome)
+    print("Starting test...")
+    show_stats()
 
-    # test question
-    ans = engine.answer_question("What is the legend of the Eastern mountains?")
-    print("Question =>", ans)
+    print("\nApplying action: rest")
+    outcome = engine.apply_action("rest")
+    print("Outcome =>", outcome)
+    show_stats()
 
+    print("\nApplying action: check inventory")
+    outcome = engine.apply_action("check inventory")
+    print("Outcome =>", outcome)
+    show_stats()
 
 if __name__ == "__main__":
     test_game()

@@ -2,16 +2,15 @@
 import sys, os
 from flask import Flask, request, jsonify, send_from_directory
 
-# Update Python path if needed to ensure your new modules are importable:
+# Update Python path if needed...
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.insert(0, parent_dir)
 
-# Import your game engine
-from hex_game_engine import HexGameEngine  # Updated import statement
+from game_engine import GameEngine
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
-engine = HexGameEngine(db_path="game.db")  # Updated class name
+engine = GameEngine(db_path="game.db")
 
 @app.route("/")
 def index():
@@ -20,6 +19,11 @@ def index():
 @app.route("/api/get_player_state", methods=["GET"])
 def get_player_state():
     p = engine.get_player_state()
+
+    # Convert month numeric -> string if you wish
+    month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    month_str = month_names[(p['time_month']-1) % 12]
+
     return jsonify({
         "health": p["health"],
         "money": p["money"],
@@ -33,7 +37,13 @@ def get_player_state():
         "location_name": p["location_name"],
         "q": p["q"],
         "r": p["r"],
-        "place_name": p["place_name"]
+        "place_name": p["place_name"],
+
+        ### TIME FEATURE ADDED ###
+        "time_year": p["time_year"],
+        "time_month_str": month_str,
+        "time_day": p["time_day"],
+        "time_hour": p["time_hour"]
     })
 
 @app.route("/api/get_actions", methods=["GET"])

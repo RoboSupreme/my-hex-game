@@ -1,43 +1,69 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Hex Adventure Web UI</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-  </head>
-  <body>
-    <h1>Hex Adventure Web UI</h1>
-    
-    <div id="statusSection">
-      <div class="section-header">
-        <h2>Player Status</h2>
-        <button id="toggleStats" class="toggle-button">Toggle Stats</button>
-      </div>
-      <div id="playerStatus" class="stats-visible">
-        <!-- JS will fill this in dynamically -->
-      </div>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hex Adventure Game</title>
+    <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+    <h1>Hex Adventure Game</h1>
+
+    <!-- 1. Game Output Section -->
+    <div id="output" class="section">
+        <h2>Game Output</h2>
+        <div id="gameOutput"></div>
     </div>
 
-    <div id="actionsSection">
-      <h2>Possible Actions</h2>
-      <div id="actionsContainer">
-        <!-- JS will fill in clickable buttons here -->
-      </div>
+    <!-- 2. Player Stats Section -->
+    <div id="statusSection" class="section">
+        <div class="section-header">
+            <h2>Player Status</h2>
+            <button id="toggleStats">Toggle Stats</button>
+        </div>
+        <div id="playerStatus" class="stats-visible">
+            <div class="location-info">
+                <span id="locationDisplay">Location: Loading...</span>
+                <span id="coordinatesDisplay">Coordinates: Loading...</span>
+                <span id="timeDisplay">Time: Loading...</span>
+            </div>
+            <div class="stats-grid">
+                <div class="stats-column">
+                    <h3>Health & Combat</h3>
+                    <div id="healthStats"></div>
+                </div>
+                <div class="stats-column">
+                    <h3>Resources</h3>
+                    <div id="resourceStats"></div>
+                </div>
+                <div class="stats-column">
+                    <h3>Needs</h3>
+                    <div id="needsStats"></div>
+                </div>
+                <div class="stats-column">
+                    <h3>Time</h3>
+                    <div id="timeStats"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="askSection">
-      <h2>Ask the Spirit</h2>
-      <input type="text" id="askInput" placeholder="Ask about the world (e.g. 'ask: Where am I?')">
-      <button id="askButton">Ask</button>
+    <!-- 3. Actions Section -->
+    <div id="actionsSection" class="section">
+        <h2>Possible Actions</h2>
+        <div id="actionButtons"></div>
     </div>
 
-    <hr />
-
-    <div id="output">
-      <h2>Game Output</h2>
-      <div id="outputLog"><!-- Narrative log goes here --></div>
+    <!-- 4. Ask the Spirit Section -->
+    <div id="askSection" class="section">
+        <h2>Ask the Spirit</h2>
+        <div class="input-group">
+            <input type="text" id="questionInput" placeholder="Ask about the world...">
+            <button id="askButton">Ask</button>
+        </div>
+        <div id="spiritAnswer"></div>
     </div>
-    
-    <script src="/static/app.js"></script>
-  </body>
+
+    <script src="static/app.js"></script>
+</body>
 </html>

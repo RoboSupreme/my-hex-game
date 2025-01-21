@@ -5,9 +5,11 @@
     --secondary-color: #2c3e50;
     --background-color: #f5f6fa;
     --text-color: #2c3e50;
-    --border-radius: 4px;
+    --border-radius: 8px;
     --transition: all 0.3s ease;
     --stats-bg: rgba(255, 255, 255, 0.9);
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 body {
@@ -20,33 +22,51 @@ body {
     background: var(--background-color);
 }
 
-h1, h2 {
+h1 {
     color: var(--secondary-color);
-    margin-bottom: 15px;
+    margin-bottom: 25px;
+    text-align: center;
+    font-size: 2.5em;
 }
 
-/* Section Containers */
-#statusSection, #actionsSection, #askSection, #output {
+h2 {
+    color: var(--secondary-color);
+    margin: 0 0 15px 0;
+    font-size: 1.5em;
+}
+
+h3 {
+    color: var(--secondary-color);
+    margin: 0 0 10px 0;
+    font-size: 1.2em;
+}
+
+/* Game Output Section - Top Priority */
+#output {
     background: white;
     padding: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
     border-radius: var(--border-radius);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: var(--transition);
+    box-shadow: var(--shadow);
 }
 
-#statusSection:hover, #actionsSection:hover, #askSection:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+#gameOutput {
+    min-height: 150px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 15px;
+    background: var(--background-color);
+    border-radius: var(--border-radius);
+    white-space: pre-wrap;
 }
 
-/* Status Section */
+/* Player Stats Section - Second Priority */
 #statusSection {
     background: white;
     padding: 20px;
+    margin-bottom: 25px;
     border-radius: var(--border-radius);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
+    box-shadow: var(--shadow);
 }
 
 .section-header {
@@ -56,11 +76,6 @@ h1, h2 {
     margin-bottom: 15px;
 }
 
-.section-header h2 {
-    margin: 0;
-}
-
-/* Player Status */
 #playerStatus {
     transition: var(--transition);
     overflow: hidden;
@@ -80,77 +95,91 @@ h1, h2 {
 
 .location-info {
     background: var(--stats-bg);
-    padding: 10px;
+    padding: 15px;
     border-radius: var(--border-radius);
     margin-bottom: 15px;
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 10px;
-}
-
-.stats-grid {
-    display: flex;
     gap: 15px;
-    margin-top: 10px;
 }
 
-.stats-column {
+.location-info span {
     flex: 1;
-    background: var(--stats-bg);
-    padding: 15px;
+    min-width: 200px;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, 0.5);
     border-radius: var(--border-radius);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
 }
 
-.stat-item {
-    padding: 5px;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
-    transition: all 0.2s ease;
-    cursor: default;
-}
-
-.stat-item:hover {
-    background: rgba(74, 144, 226, 0.1);
-    transform: translateX(2px);
-    padding-left: 8px;
-}
-
-.stat-item:last-child {
-    border-bottom: none;
-}
-
-.stat-item b {
+#timeDisplay {
     color: var(--primary-color);
-    display: inline-block;
-    width: 80px;
-}
-
-/* Toggle Button */
-.toggle-button {
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: var(--transition);
     font-weight: 500;
 }
 
-.toggle-button:hover {
-    background: #357abd;
-    transform: translateY(-1px);
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
 }
 
-/* Actions Container */
-#actionsContainer {
+.stats-column {
+    background: var(--stats-bg);
+    padding: 15px;
+    border-radius: var(--border-radius);
+}
+
+/* Actions Section - Third Priority */
+#actionsSection {
+    background: white;
+    padding: 20px;
+    margin-bottom: 25px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+#actionButtons {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
     padding: 10px 0;
+}
+
+/* Ask Spirit Section - Fourth Priority */
+#askSection {
+    background: white;
+    padding: 20px;
+    margin-bottom: 25px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+#questionInput {
+    flex: 1;
+    padding: 10px 15px;
+    border: 2px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 1em;
+    transition: var(--transition);
+}
+
+#questionInput:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+#spiritAnswer {
+    padding: 15px;
+    background: var(--background-color);
+    border-radius: var(--border-radius);
+    min-height: 50px;
 }
 
 /* Buttons */
@@ -169,45 +198,44 @@ button {
 button:hover {
     background: #357abd;
     transform: translateY(-1px);
+    box-shadow: var(--hover-shadow);
 }
 
-/* Ask Section */
-#askSection {
-    margin: 20px 0;
-    display: flex;
-    gap: 10px;
+/* Stats Toggle */
+#toggleStats {
+    background: var(--secondary-color);
 }
 
-#askInput {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: var(--border-radius);
+/* Stat Items */
+.stat-item {
+    padding: 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    transition: var(--transition);
 }
 
-/* Output Section */
-#output {
-    background: white;
-    padding: 20px;
-    border-radius: var(--border-radius);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-top: 20px;
+.stat-item:hover {
+    background: rgba(74, 144, 226, 0.1);
+    transform: translateX(2px);
+    padding-left: 12px;
 }
 
-#outputLog {
-    max-height: 300px;
-    overflow-y: auto;
-    padding: 10px;
-    background: var(--background-color);
-    border-radius: var(--border-radius);
+.stat-item:last-child {
+    border-bottom: none;
 }
 
-#outputLog p {
-    margin: 5px 0;
-    padding: 10px;
-    background: white;
-    border-radius: var(--border-radius);
-    border-left: 3px solid var(--primary-color);
+.stat-item b {
+    color: var(--primary-color);
+    display: inline-block;
+    width: 80px;
+}
+
+/* Time Stats Specific */
+#timeStats .stat-item {
+    color: var(--secondary-color);
+}
+
+#timeStats .stat-item b {
+    color: var(--primary-color);
 }
 
 /* Responsive Design */
@@ -216,15 +244,24 @@ button:hover {
         padding: 10px;
     }
 
-    #askSection {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .location-info {
         flex-direction: column;
+        gap: 10px;
     }
 
-    #askInput {
+    .location-info span {
+        min-width: unset;
+    }
+
+    #questionInput {
         width: 100%;
     }
 
-    button {
-        width: 100%;
+    .input-group {
+        flex-direction: column;
     }
 }
