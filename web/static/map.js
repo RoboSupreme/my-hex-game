@@ -1,4 +1,3 @@
-// Map initialization and rendering
 document.addEventListener("DOMContentLoaded", () => {
     // Constants
     const HEX_SIZE = 50;  // side length of each hex cell
@@ -11,7 +10,36 @@ document.addEventListener("DOMContentLoaded", () => {
     let isDragging = false;
     let lastMousePos = { x: 0, y: 0 };
 
-    // Get DOM elements
+    // Precompute midpoints for the 6 neighboring directions in axial coords.
+    // For a "pointy-top" hex, the directions can be mapped as:
+    //   +q,   0  =>  0 degrees
+    //   +q,  -1  => -60 degrees
+    //    0,  -1  => -120
+    //   -q,   0  => 180
+    //   -q,  +1  => 120
+    //    0,  +1  => 60
+    // The distance from center to an edge midpoint is exactly HEX_SIZE.
+    const sideVectors = {
+        "1,0":   { x:  HEX_SIZE,          y: 0 },
+        "1,-1":  { x:  HEX_SIZE * 0.5,    y: -HEX_SIZE * (sqrt3/2) },
+        "0,-1":  { x: -HEX_SIZE * 0.5,    y: -HEX_SIZE * (sqrt3/2) },
+        "-1,0":  { x: -HEX_SIZE,          y: 0 },
+        "-1,1":  { x: -HEX_SIZE * 0.5,    y:  HEX_SIZE * (sqrt3/2) },
+        "0,1":   { x:  HEX_SIZE * 0.5,    y:  HEX_SIZE * (sqrt3/2) },
+    };
+
+    // Helper to get the “midpoint of the edge” for an exit in direction dq,dr
+    function getEdgeMidpoint(cx, cy, dq, dr) {
+        const key = `${dq},${dr}`;
+        const v = sideVectors[key];
+        if (!v) {
+            // If code tries to parse something like q+2 or an invalid direction, fallback
+            return { x: cx, y: cy };
+        }
+        return { x: cx + v.x, y: cy + v.y };
+    }
+
+    // DOM elements
     const mapContainer = document.getElementById("mapContainer");
     const toggleMap = document.getElementById("toggleMap");
     const canvas = document.getElementById("mapCanvas");
@@ -32,7 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Convert axial coordinates (q,r) to pixel coordinates
+    // Convert axial (q,r) to pixel center of the chunk
     function hexToPixel(q, r) {
         const x = HEX_SIZE * sqrt3 * (q + r/2);
         const y = HEX_SIZE * 1.5 * r;
@@ -43,11 +71,11 @@ document.addEventListener("DOMContentLoaded", () => {
     function drawHex(ctx, cx, cy, fill = "#eee", stroke = "#888") {
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const angleDeg = 60 * i - 30;
-            const angleRad = Math.PI / 180 * angleDeg;
+            const angleDeg = 60 * i - 30;  // pointy top offset
+            const angleRad = (Math.PI / 180) * angleDeg;
             const x = cx + HEX_SIZE * Math.cos(angleRad);
             const y = cy + HEX_SIZE * Math.sin(angleRad);
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            (i === 0) ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
         ctx.closePath();
         ctx.fillStyle = fill;
@@ -56,16 +84,76 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.stroke();
     }
 
-    // Get a stable offset for location placement within a hex
+    /**
+     * stableSubPosition(locName)
+     * Gives a stable offset (dx, dy) for a given location name,
+     * but keeps it well within the hex boundary.
+     */
     function stableSubPosition(locName) {
+        // A simple hash
         let hash = 0;
         for (let i = 0; i < locName.length; i++) {
             hash = (hash << 5) - hash + locName.charCodeAt(i);
-            hash |= 0;
+            hash |= 0; // convert to 32-bit
         }
-        const dx = (hash % 60) - 30;
-        const dy = ((hash / 60) % 60) - 30;
+        // Convert that into some offset in range ~[-30, +30]
+        // but random enough per location name
+        let dx = (hash % 60) - 30;
+        let dy = (((hash / 60) | 0) % 60) - 30;
+
+        // Now scale that so that the final (dx, dy) fits well inside the hex.
+        // The hex’s “incircle” radius is (sqrt(3)/2)*HEX_SIZE ≈ 0.866 * HEX_SIZE
+        // We’ll go ~ 60% of that radius to stay well inside.
+        let maxRadius = 0.6 * HEX_SIZE * sqrt3/2;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 0) {
+            const scale = maxRadius / dist;
+            dx *= scale;
+            dy *= scale;
+        }
         return { dx, dy };
+    }
+
+    // Draw location marker (circle/square/triangle)
+    function drawLocation(ctx, shape, x, y, isCurrentLocation = false) {
+        ctx.save();
+        ctx.translate(x, y);
+        
+        // If it’s the current location, add a highlight
+        if (isCurrentLocation) {
+            ctx.beginPath();
+            ctx.arc(0, 0, 12, 0, 2 * Math.PI);
+            ctx.fillStyle = "rgba(74, 144, 226, 0.3)";
+            ctx.fill();
+        }
+
+        ctx.fillStyle = isCurrentLocation ? "#4a90e2" : "#c33";
+
+        if (shape === "circle") {
+            ctx.beginPath();
+            ctx.arc(0, 0, 8, 0, 2 * Math.PI);
+            ctx.fill();
+        } else if (shape === "square") {
+            ctx.fillRect(-6, -6, 12, 12);
+        } else {
+            // triangle
+            ctx.beginPath();
+            ctx.moveTo(0, -8);
+            ctx.lineTo(7, 6);
+            ctx.lineTo(-7, 6);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // Draw a simple line
+    function drawLine(ctx, x1, y1, x2, y2, color="#444") {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = color;
+        ctx.stroke();
     }
 
     // Pick a shape based on location name
@@ -78,128 +166,97 @@ document.addEventListener("DOMContentLoaded", () => {
         return shapes[index];
     }
 
-    // Draw location marker
-    function drawLocation(ctx, shape, x, y, isCurrentLocation = false) {
-        ctx.save();
-        ctx.translate(x, y);
-        
-        // Draw highlight for current location
-        if (isCurrentLocation) {
-            ctx.beginPath();
-            ctx.arc(0, 0, 12, 0, 2 * Math.PI);
-            ctx.fillStyle = "rgba(74, 144, 226, 0.3)";
-            ctx.fill();
-        }
-
-        ctx.fillStyle = isCurrentLocation ? "#4a90e2" : "#c33";
-        
-        if (shape === "circle") {
-            ctx.beginPath();
-            ctx.arc(0, 0, 8, 0, 2 * Math.PI);
-            ctx.fill();
-        } else if (shape === "square") {
-            ctx.fillRect(-6, -6, 12, 12);
-        } else { // triangle
-            ctx.beginPath();
-            ctx.moveTo(0, -8);
-            ctx.lineTo(7, 6);
-            ctx.lineTo(-7, 6);
-            ctx.closePath();
-            ctx.fill();
-        }
-        ctx.restore();
-    }
-
-    // Draw connection between locations
-    function drawLine(ctx, x1, y1, x2, y2) {
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.strokeStyle = "#444";
-        ctx.stroke();
-    }
-
     // Main map drawing function
     function drawMap() {
         console.log('Drawing map...');
-        // Get current player location
+        // We attempt to parse the player's current location (q,r)
         const coordsText = document.getElementById("coordinatesDisplay").textContent;
-        console.log('Coordinates text:', coordsText);
         const qMatch = coordsText.match(/\((-?\d+)/);
         const rMatch = coordsText.match(/,\s*(-?\d+)/);
         
-        if (!qMatch || !rMatch) {
-            console.error('Could not parse coordinates from:', coordsText);
-            return;
+        let playerQ = 0, playerR = 0;
+        if (qMatch && rMatch) {
+            playerQ = parseInt(qMatch[1]);
+            playerR = parseInt(rMatch[1]);
+            console.log('Player location:', playerQ, playerR);
         }
-        
-        const playerQ = parseInt(qMatch[1]);
-        const playerR = parseInt(rMatch[1]);
-        console.log('Player location:', playerQ, playerR);
-        
+
         ctx.save();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Apply camera transformations
+        // Camera transform
         ctx.translate(cameraOffset.x, cameraOffset.y);
         ctx.scale(cameraZoom, cameraZoom);
 
-        // Draw each chunk
+        // Create a set of generated chunk coordinates for quick lookup
+        const generatedChunks = new Set(mapData.map(chunk => `${chunk.q},${chunk.r}`));
+
+        // Draw each chunk in mapData
         for (let chunk of mapData) {
-            const q = chunk.q;
-            const r = chunk.r;
+            const { q, r, chunk_data } = chunk;
             const { x: cx, y: cy } = hexToPixel(q, r);
-            
-            // Draw hex cell
+
+            // draw the hex background
             const isCurrentChunk = (q === playerQ && r === playerR);
             drawHex(ctx, cx, cy, isCurrentChunk ? "#e3f2fd" : "#eee");
 
-            // Draw locations in chunk
-            const locations = chunk.chunk_data.locations || {};
+            // Now draw each location in this chunk
+            const locations = chunk_data.locations || {};
             for (let locName in locations) {
                 const locObj = locations[locName];
+                // Only draw visible locations
+                if (!locObj.visible) continue;
+
+                // pick a stable offset so location is inside the hex
                 const { dx, dy } = stableSubPosition(locName);
                 const lx = cx + dx;
                 const ly = cy + dy;
-                
-                // Check if this is current location
-                const isCurrentLoc = isCurrentChunk && 
-                    document.getElementById("locationDisplay").textContent.includes(locName);
-                
-                // Draw location marker
+
+                // Is this the player's actual location?
+                const locationDisplayText = document.getElementById("locationDisplay").textContent;
+                const isCurrentLoc = (isCurrentChunk && locationDisplayText.includes(locName));
+
+                // draw the marker
                 const shape = pickShape(locName);
                 drawLocation(ctx, shape, lx, ly, isCurrentLoc);
 
-                // Draw connections
+                // draw connections
                 const conns = locObj.connections || [];
                 for (let c of conns) {
                     if (c.startsWith("exit:")) {
-                        // Draw partial line toward next chunk
+                        // Parse the exit direction
                         let [qStr, rStr] = c.replace("exit:", "").split(",");
-                        let dq = parseInt(qStr.slice(1), 10) * (qStr[0] === "-" ? -1 : 1);
-                        let dr = parseInt(rStr.slice(1), 10) * (rStr[0] === "-" ? -1 : 1);
-                        let edgeHex = {
-                            x: cx + dq * HEX_SIZE * sqrt3 * 0.5,
-                            y: cy + dr * HEX_SIZE * 1.5 * 0.5
-                        };
-                        drawLine(ctx, lx, ly, edgeHex.x, edgeHex.y);
-                    } else if (locations[c]) {
-                        // Connection to another location in same chunk
-                        const { dx: tdx, dy: tdy } = stableSubPosition(c);
-                        const tx = cx + tdx;
-                        const ty = cy + tdy;
-                        // Only draw if locName < c to avoid double lines
+                        // Remove 'q' and 'r' prefixes
+                        qStr = qStr.slice(1);
+                        rStr = rStr.slice(1);
+                        console.log('Exit string parts:', qStr, rStr);
+                        
+                        // Now strings should be like '+1' or '-1'
+                        const dq = parseInt(qStr, 10);
+                        const dr = parseInt(rStr, 10);
+                        console.log('Parsed exit deltas:', dq, dr);
+
+                        // Always draw line to edge midpoint for exits
+                        let edge = getEdgeMidpoint(cx, cy, dq, dr);
+                        console.log('Drawing line from', lx, ly, 'to', edge.x, edge.y);
+                        drawLine(ctx, lx, ly, edge.x, edge.y);
+                    } else if (locations[c] && locations[c].visible) {
+                        // Connect to another visible location in same chunk
                         if (locName < c) {
+                            const { dx: tdx, dy: tdy } = stableSubPosition(c);
+                            const tx = cx + tdx;
+                            const ty = cy + tdy;
                             drawLine(ctx, lx, ly, tx, ty);
                         }
                     }
                 }
             }
         }
+
         ctx.restore();
     }
 
-    // Pan/Zoom event handlers
+    // Initialize panning/zooming
     function initPanZoom() {
         canvas.addEventListener("mousedown", e => {
             isDragging = true;
@@ -219,34 +276,34 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
+        // stop dragging
         canvas.addEventListener("mouseup", () => isDragging = false);
         canvas.addEventListener("mouseleave", () => isDragging = false);
 
+        // zoom
         canvas.addEventListener("wheel", e => {
             e.preventDefault();
             const zoomFactor = 1.05;
             const oldZoom = cameraZoom;
-            
-            // Get mouse position relative to canvas
+
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
-            
-            // Get mouse position relative to camera
+
+            // transform to camera space
             const mouseXCanvas = (mouseX - cameraOffset.x) / oldZoom;
             const mouseYCanvas = (mouseY - cameraOffset.y) / oldZoom;
-            
-            // Apply zoom
+
+            // adjust zoom
             if (e.deltaY < 0) {
                 cameraZoom *= zoomFactor;
             } else {
                 cameraZoom /= zoomFactor;
             }
-            
-            // Adjust offset to keep mouse position fixed
+            // keep center under mouse
             cameraOffset.x = mouseX - mouseXCanvas * cameraZoom;
             cameraOffset.y = mouseY - mouseYCanvas * cameraZoom;
-            
+
             drawMap();
         });
     }
@@ -254,7 +311,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Make drawMap accessible outside
     window.drawMap = drawMap;
 
-    // Fetch map data and refresh display
+    // Fetch map data and draw
     async function doRefreshMap() {
         try {
             console.log('Fetching map data...');
@@ -266,18 +323,18 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Error fetching map data:", err);
         }
     }
-
-    // Make refreshMap globally available
     window.refreshMap = doRefreshMap;
 
     // Initialize
     initPanZoom();
     refreshMap();
 
-    // Add map refresh to the global refreshUI function
+    // Optionally, if you want to re-hook the global refreshUI to also refresh the map:
+    /*
     const originalRefreshUI = window.refreshUI;
     window.refreshUI = async function() {
         await originalRefreshUI();
         await refreshMap();
     };
+    */
 });

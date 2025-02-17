@@ -62,8 +62,9 @@ class LocationManager:
 
         self._set_player_chunk(p["player_id"], new_q, new_r)
 
-        # load chunk, pick default location
-        chunk_data = self.chunk_manager.get_or_create_chunk_data(new_q, new_r)
+        # When moving to a new chunk, tell it which direction we came from
+        source_dir = f"q{'-' if dq < 0 else '+'}{abs(dq)},r{'-' if dr < 0 else '+'}{abs(dr)}"
+        chunk_data = self.chunk_manager.get_or_create_chunk_data(new_q, new_r, source_dir)
         possible_locs = list(chunk_data["locations"].keys())
 
         if "village" in possible_locs:

@@ -41,18 +41,29 @@ h3 {
     font-size: 1.2em;
 }
 
-/* Game Output Section - Top Priority */
+/* Flex Container for Game Output and Actions */
+.flex-container {
+    display: flex;
+    gap: 25px;
+    margin-bottom: 25px;
+}
+
+.flex-item {
+    flex: 1;
+    min-width: 0; /* Prevents flex items from overflowing */
+}
+
+/* Game Output Section */
 #output {
     background: white;
     padding: 20px;
-    margin-bottom: 25px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
 }
 
 #gameOutput {
-    min-height: 150px;
-    max-height: 300px;
+    min-height: 200px;
+    max-height: 400px;
     overflow-y: auto;
     padding: 15px;
     background: var(--background-color);
@@ -167,7 +178,7 @@ h3 {
     gap: 10px;
 }
 
-/* Ask Spirit Section - Fourth Priority */
+/* Ask Spirit Section */
 #askSection {
     background: white;
     padding: 20px;
@@ -176,10 +187,21 @@ h3 {
     box-shadow: var(--shadow);
 }
 
+#spiritAnswer {
+    min-height: 100px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: var(--background-color);
+    border-radius: var(--border-radius);
+    white-space: pre-wrap;
+}
+
 .input-group {
     display: flex;
     gap: 10px;
-    margin-bottom: 15px;
+    margin-top: 15px;
 }
 
 #questionInput {
@@ -195,10 +217,6 @@ h3 {
     border-color: var(--primary-color);
     outline: none;
 }
-
-#spiritAnswer {
-    padding: 15px;
-    background: var(--background-color);
     border-radius: var(--border-radius);
     min-height: 50px;
 }

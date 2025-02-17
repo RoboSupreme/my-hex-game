@@ -9,13 +9,7 @@
 <body>
     <h1>Hex Adventure Game</h1>
 
-    <!-- 1. Game Output Section -->
-    <div id="output" class="section">
-        <h2>Game Output</h2>
-        <div id="gameOutput"></div>
-    </div>
-
-    <!-- 2. Player Stats Section -->
+    <!-- 1. Player Stats Section (Top) -->
     <div id="statusSection" class="section">
         <div class="section-header">
             <h2>Player Status</h2>
@@ -48,23 +42,32 @@
         </div>
     </div>
 
-    <!-- 3. Actions Section -->
-    <div id="actionsSection" class="section">
-        <h2>Possible Actions</h2>
-        <div id="actionButtons"></div>
+    <!-- 2. Game Output and Actions Side by Side -->
+    <div class="flex-container">
+        <!-- Game Output (Left) -->
+        <div id="output" class="section flex-item">
+            <h2>Game Output</h2>
+            <div id="gameOutput"></div>
+        </div>
+
+        <!-- Actions Section (Right) -->
+        <div id="actionsSection" class="section flex-item">
+            <h2>Possible Actions</h2>
+            <div id="actionButtons"></div>
+        </div>
     </div>
 
-    <!-- 4. Ask the Spirit Section -->
+    <!-- 3. Ask the Spirit Section -->
     <div id="askSection" class="section">
         <h2>Ask the Spirit</h2>
+        <div id="spiritAnswer"></div>
         <div class="input-group">
             <input type="text" id="questionInput" placeholder="Ask about the world...">
             <button id="askButton">Ask</button>
         </div>
-        <div id="spiritAnswer"></div>
     </div>
 
-    <!-- 5. World Map Section -->
+    <!-- 4. World Map Section -->
     <div id="mapSection" class="section">
         <div class="section-header">
             <h2>World Map</h2>

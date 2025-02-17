@@ -15,10 +15,15 @@ class ChunkManager:
         self.db = db
         self.ai = cohere_client
 
-    def get_or_create_chunk_data(self, q: int, r: int) -> Dict[str, Any]:
+    def get_or_create_chunk_data(self, q: int, r: int, source_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Try to load chunk data from the DB. If missing, generate via Cohere AI.
         Returns the JSON dict for the chunk structure.
+        
+        Args:
+            q: Chunk q coordinate
+            r: Chunk r coordinate
+            source_dir: Direction we came from, e.g. 'q+1,r+0' means we came from the chunk to our right
         """
         c = self.db.cursor()
         row = c.execute(
@@ -29,7 +34,7 @@ class ChunkManager:
             return json.loads(row["data_json"])
 
         # If not found, generate new chunk data
-        new_chunk = self.generate_chunk_via_ai(q, r)
+        new_chunk = self.generate_chunk_via_ai(q, r, source_dir)
         c.execute(
             "INSERT INTO chunks (q, r, data_json) VALUES (?,?,?)",
             (q, r, json.dumps(new_chunk))
@@ -37,7 +42,7 @@ class ChunkManager:
         self.db.commit()
         return new_chunk
 
-    def generate_chunk_via_ai(self, q: int, r: int) -> Dict[str, Any]:
+    def generate_chunk_via_ai(self, q: int, r: int, source_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Calls Cohere to produce JSON describing multiple named locations in this chunk.
         Each location must have 'visible', 'connections', 'description',
@@ -64,6 +69,17 @@ class ChunkManager:
   }
 }'''
 
+        # If we have a source direction, determine the opposite direction for connections back
+        back_connection = None
+        if source_dir:
+            # Convert like 'q+1,r+0' to 'q-1,r+0' by flipping the sign after q/r
+            q_part, r_part = source_dir.split(',')            
+            q_sign = '+' if q_part[1] == '-' else '-'  # flip the sign
+            r_sign = '+' if r_part[1] == '-' else '-'  # flip the sign
+            q_num = q_part[2:]  # get number after sign
+            r_num = r_part[2:]  # get number after sign
+            back_connection = f'exit:q{q_sign}{q_num},r{r_sign}{r_num}'
+
         system_prompt = f"""
 You are generating a new area in our fantasy exploration game at chunk coordinates (q={q}, r={r}).
 Return ONLY valid JSON describing this chunk's locations, following these STRICT rules:
@@ -79,6 +95,7 @@ Return ONLY valid JSON describing this chunk's locations, following these STRICT
    - "sites": dict of 1-3 discoverable sub-locations
 
 3. If (q,r) == (0,0), one location MUST be named "village"
+4. If we came from {source_dir}, at least one VISIBLE location must connect to {back_connection}
 
 Example structure:
 {example_json}
@@ -108,6 +125,31 @@ Return ONLY the JSON, no commentary.
                 locs = chunk_data["locations"]
                 if "village" not in locs:
                     raise ValueError("No 'village' in chunk(0,0) data")
+
+            # If we have a source direction, ensure at least one visible location connects back
+            if source_dir:
+                back_connection = None
+                # Convert like 'q+1,r+0' to 'q-1,r+0' by flipping the sign after q/r
+                q_part, r_part = source_dir.split(',')
+                q_sign = '+' if q_part[1] == '-' else '-'  # flip the sign
+                r_sign = '+' if r_part[1] == '-' else '-'  # flip the sign
+                q_num = q_part[2:]  # get number after sign
+                r_num = r_part[2:]  # get number after sign
+                back_connection = f'exit:q{q_sign}{q_num},r{r_sign}{r_num}'
+
+                # Check if any visible location has this back connection
+                has_back_connection = False
+                for loc in chunk_data["locations"].values():
+                    if loc.get("visible", False) and back_connection in loc.get("connections", []):
+                        has_back_connection = True
+                        break
+
+                # If no visible location connects back, add it to the first visible location
+                if not has_back_connection:
+                    for loc in chunk_data["locations"].values():
+                        if loc.get("visible", False):
+                            loc["connections"] = loc.get("connections", []) + [back_connection]
+                            break
 
             return chunk_data
 

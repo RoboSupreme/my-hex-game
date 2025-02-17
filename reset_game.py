@@ -91,7 +91,7 @@ def create_starting_chunk():
             "village": {
                 "description": "A quaint village nestled among rolling hills, with cobblestone streets and timber-framed houses. The village square is a hub of activity, where locals gather to trade stories and goods.",
                 "visible": True,
-                "connections": ["forest", "exit:q+1,r0"],
+                "connections": ["forest", "exit:q+1,r+0"],
                 "sites": {
                     "inn": {
                         "description": "The Golden Plough Inn, a warm and welcoming establishment, offers travelers a cozy respite with its crackling fireplace and hearty meals.",
@@ -117,7 +117,7 @@ def create_starting_chunk():
             "forest": {
                 "description": "A dense forest with towering trees and a canopy of lush greenery. The forest floor is blanketed with soft moss and an abundance of wildlife calls this place home.",
                 "visible": True,
-                "connections": ["village", "exit:q0,r-1"],
+                "connections": ["village", "exit:q+0,r-1"],
                 "sites": {
                     "hidden_clearing": {
                         "description": "A secret clearing deep within the forest, where a mystical stone circle stands, its purpose unknown to all but a few.",
@@ -131,7 +131,7 @@ def create_starting_chunk():
             "mystic_grove": {
                 "description": "A sacred grove, where ancient trees whisper secrets to those who dare to listen. The air is thick with the scent of incense and the sound of distant chanting.",
                 "visible": False,
-                "connections": ["exit:q1,r0"],
+                "connections": ["exit:q+1,r+0"],
                 "sites": {
                     "altar": {
                         "description": "A stone altar, surrounded by flickering torches, where rituals and offerings are made to the unknown gods.",
@@ -145,7 +145,7 @@ def create_starting_chunk():
             "mountain_pass": {
                 "description": "A treacherous mountain pass, with steep cliffs and narrow pathways. The air is thin and cold, and the sound of rushing water echoes from a nearby waterfall.",
                 "visible": True,
-                "connections": ["exit:q-1,r0"],
+                "connections": ["exit:q-1,r+0"],
                 "sites": {
                     "abandoned_watchtower": {
                         "description": "An ancient watchtower, now in ruins, offers a breathtaking view of the surrounding landscape. Its walls still bear the marks of long-forgotten battles.",
@@ -159,7 +159,7 @@ def create_starting_chunk():
             "ruined_castle": {
                 "description": "The remnants of a once-grand castle, now overgrown with ivy and shrouded in mystery. Its crumbling walls hide dark secrets and forgotten treasures.",
                 "visible": False,
-                "connections": ["exit:q0,r1"],
+                "connections": ["exit:q+0,r+1"],
                 "sites": {
                     "crypt": {
                         "description": "A subterranean crypt, its stone steps leading to ancient tombs and forgotten relics.",
