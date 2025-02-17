@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Update location and time info
             locationDisplay.textContent = `Location: ${data.location_name}`;
-            coordinatesDisplay.textContent = `Coordinates: (${data.q}, ${data.r})`;
+            coordinatesDisplay.textContent = `Coordinates: (${data.q},${data.r})`; // Removed space after comma to match regex
             timeDisplay.textContent = `Time: Year ${data.time_year} AC, ${data.time_month_str} ${formatDay(data.time_day)}, ${formatTime(data.time_hour)}`;
             
             // Update health & combat stats
@@ -96,19 +96,51 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // Helper function to add a group of actions
+    function addActionGroup(heading, actionList) {
+        if (!actionList || actionList.length === 0) return;
+
+        const section = document.createElement("div");
+        section.className = "action-group";
+
+        const label = document.createElement("h3");
+        label.textContent = heading;
+        section.appendChild(label);
+
+        const buttonContainer = document.createElement("div");
+        buttonContainer.className = "action-buttons";
+
+        actionList.forEach(action => {
+            const btn = document.createElement("button");
+            btn.textContent = action;
+            btn.addEventListener("click", () => applyAction(action));
+            buttonContainer.appendChild(btn);
+        });
+
+        section.appendChild(buttonContainer);
+        actionButtons.appendChild(section);
+    }
+
     // 2) Load possible actions
     async function loadActions() {
         try {
             const res = await fetch("/api/get_actions");
             const data = await res.json();
-            const actions = data.actions;
-            actionButtons.innerHTML = ""; // clear old buttons
-            actions.forEach(action => {
-                const btn = document.createElement("button");
-                btn.textContent = action;
-                btn.addEventListener("click", () => applyAction(action));
-                actionButtons.appendChild(btn);
-            });
+            const { location_movement, site_movement, site_actions, follow_up_actions } = data;
+
+            // Clear old buttons
+            actionButtons.innerHTML = "";
+
+            // Add each category
+            if (follow_up_actions && follow_up_actions.length > 0) {
+                // If we have follow-up actions, show them prominently
+                addActionGroup("Available Actions", follow_up_actions);
+            } else {
+                // Otherwise show the standard movement and site actions
+                addActionGroup("Location Movement", location_movement);
+                addActionGroup("Site Actions", site_movement);
+                addActionGroup("Other Actions", site_actions);
+            }
         } catch (err) {
             console.error(err);
             appendOutput("Error loading actions: " + err.message);
@@ -125,9 +157,8 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             const data = await res.json();
             appendOutput(`<b>Action:</b> ${actionName}<br><b>Result:</b> ${data.result}`);
-            // refresh UI
-            await loadPlayerState();
-            await loadActions();
+            // refresh UI after action
+            await refreshUI();
         } catch (err) {
             console.error(err);
             appendOutput("Error applying action: " + err.message);
@@ -149,6 +180,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await res.json();
             spiritAnswer.innerHTML = data.answer;
             appendOutput(`<b>You asked:</b> ${question}<br><b>Spirit answers:</b> ${data.answer}`);
+            // Refresh UI after spirit interaction
+            await refreshUI();
         } catch (err) {
             console.error(err);
             spiritAnswer.innerHTML = "The spirit is silent...";
@@ -164,7 +197,23 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // On page load, fetch initial state + actions
-    loadPlayerState();
-    loadActions();
+    // Utility: refresh all UI elements
+    async function refreshUI() {
+        try {
+            await loadPlayerState();
+            await loadActions();
+            // Refresh map if it's visible
+            if (document.getElementById('mapContainer').classList.contains('map-visible')) {
+                if (typeof refreshMap === 'function') {
+                    await refreshMap();
+                }
+            }
+        } catch (err) {
+            console.error('Error refreshing UI:', err);
+            appendOutput('Error refreshing game state: ' + err.message);
+        }
+    }
+
+    // On page load, refresh UI
+    refreshUI();
 });

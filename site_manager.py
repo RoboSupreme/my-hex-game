@@ -13,10 +13,11 @@ class SiteManager:
     entering a site, searching inside a site, and site-specific actions.
     """
 
-    def __init__(self, db: sqlite3.Connection, cohere_client: cohere.ClientV2, rag: LoreRAG):
+    def __init__(self, db: sqlite3.Connection, cohere_client: cohere.ClientV2, rag: LoreRAG, npc_manager):
         self.db = db
         self.ai = cohere_client
         self.rag = rag
+        self.npc_manager = npc_manager
 
     def get_possible_site_actions(self, chunk_data: Dict[str, Any], location_name: str, site_name: str) -> List[str]:
         """
@@ -77,6 +78,7 @@ Relevant Game Lore:
     def do_enter_site(self, p: Dict[str, Any], chunk_data: Dict[str, Any], site_name: str) -> str:
         """
         Enter a site in the current location, if discovered.
+        If there's no NPC in the site, there is a chance to spawn a new one.
         """
         loc_obj = chunk_data["locations"].get(p["location_name"], {})
         sites = loc_obj.get("sites", {})
@@ -94,8 +96,36 @@ Relevant Game Lore:
             chunk_data["locations"][p["location_name"]]["sites"] = sites
             self._update_chunk(p["q"], p["r"], chunk_data)
 
-        self._set_player_place(p["player_id"], site_name)
-        return f"You enter the {site_name}. {new_desc}"
+        # Check if an NPC is already present in this site
+        npc = None
+        try:
+            if "npc_id" in sites[site_name]:
+                npc = self.npc_manager.get_npc_by_id(sites[site_name]["npc_id"])
+                if not npc:  # If NPC was deleted, remove the reference
+                    del sites[site_name]["npc_id"]
+            
+            if not npc:  # No existing NPC or reference was invalid
+                # Use NPC manager to check for an NPC at the site
+                npc = self.npc_manager.spawn_npc(p["q"], p["r"], p["location_name"], site_name)
+                if npc and "npc_id" in npc:
+                    # Store only the NPC's ID inside the site data
+                    sites[site_name]["npc_id"] = npc["npc_id"]
+                    # Update the chunk data with site info
+                    chunk_data["locations"][p["location_name"]]["sites"] = sites
+                    self._update_chunk(p["q"], p["r"], chunk_data)
+
+            # Update the player's current site
+            self._set_player_place(p["player_id"], site_name)
+
+            # Prepare the encounter message if an NPC was encountered
+            encounter_msg = ""
+            if npc and "name" in npc:
+                encounter_msg = f" You notice {npc['name']} here."
+        except Exception as e:
+            logger.error(f"Error handling NPC in site: {e}", exc_info=True)
+            encounter_msg = ""  # Suppress NPC message on error
+
+        return f"You enter the {site_name}. {new_desc}{encounter_msg}"
 
     def do_leave_site(self, p: Dict[str, Any]) -> str:
         self._set_player_place(p["player_id"], None)
@@ -249,8 +279,8 @@ No commentary.
         lore_docs = self.rag.query_lore(lore_query)
         lore_context = "\n".join(d["data"]["content"] for d in lore_docs)
 
-        system_prompt = f"""Given the site description, game lore, and chosen action, generate a short result describing what happens.
-Mention how it affects the player's stats (like hunger, energy, money, alignment) in the narrative.
+        system_prompt = f"""Given the site description, game lore, and chosen action, generate a BRIEF result (under 50 words) describing what happens.
+Include key stat changes in a concise way.
 Site Description: {site_description}
 
 Relevant Game Lore:
@@ -265,9 +295,10 @@ Current Stats: (We will parse changes ourselves)
                 model="command-r-08-2024",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": "Describe the outcome of this action in a short story form."}
+                    {"role": "user", "content": "What happens?"}
                 ],
-                temperature=0.7
+                temperature=0.5,
+                max_tokens=100
             )
             result_text = resp.message.content[0].text.strip()
 
@@ -317,30 +348,45 @@ Relevant Lore:
             return base_description
 
     def _update_chunk(self, q: int, r: int, new_data: Dict[str, Any]):
-        c = self.db.cursor()
-        c.execute("UPDATE chunks SET data_json=? WHERE q=? AND r=?", (json.dumps(new_data), q, r))
-        self.db.commit()
+        self.db.execute('BEGIN TRANSACTION')
+        try:
+            c = self.db.cursor()
+            c.execute("UPDATE chunks SET data_json=? WHERE q=? AND r=?", (json.dumps(new_data), q, r))
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise e
 
     def _set_player_place(self, player_id: int, place_name: Optional[str]):
-        c = self.db.cursor()
-        c.execute("UPDATE player SET place_name=? WHERE player_id=?", (place_name, player_id))
-        self.db.commit()
+        self.db.execute('BEGIN TRANSACTION')
+        try:
+            c = self.db.cursor()
+            c.execute("UPDATE player SET place_name=? WHERE player_id=?", (place_name, player_id))
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise e
 
     def _apply_stat_changes(self, player_id: int, changes: Dict[str, int]):
-        c = self.db.cursor()
-        row = c.execute("SELECT money, energy, hunger, alignment FROM player WHERE player_id=?", (player_id,)).fetchone()
-        if row:
-            money = max(row["money"] + changes.get("money", 0), 0)
-            energy = row["energy"] + changes.get("energy", 0)
-            energy = max(min(energy, 100), 0)
-            hunger = row["hunger"] + changes.get("hunger", 0)
-            hunger = max(min(hunger, 100), 0)
-            alignment = row["alignment"] + changes.get("alignment", 0)
-            alignment = max(min(alignment, 100), 0)
+        self.db.execute('BEGIN TRANSACTION')
+        try:
+            c = self.db.cursor()
+            row = c.execute("SELECT money, energy, hunger, alignment FROM player WHERE player_id=?", (player_id,)).fetchone()
+            if row:
+                money = max(row["money"] + changes.get("money", 0), 0)
+                energy = row["energy"] + changes.get("energy", 0)
+                energy = max(min(energy, 100), 0)
+                hunger = row["hunger"] + changes.get("hunger", 0)
+                hunger = max(min(hunger, 100), 0)
+                alignment = row["alignment"] + changes.get("alignment", 0)
+                alignment = max(min(alignment, 100), 0)
 
-            c.execute("""
-                UPDATE player
-                SET money=?, energy=?, hunger=?, alignment=?
-                WHERE player_id=?
-            """, (money, energy, hunger, alignment, player_id))
-            self.db.commit()
+                c.execute("""
+                    UPDATE player
+                    SET money=?, energy=?, hunger=?, alignment=?
+                    WHERE player_id=?
+                """, (money, energy, hunger, alignment, player_id))
+                self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise e

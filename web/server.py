@@ -1,6 +1,6 @@
 # server.py
-import sys, os
-from flask import Flask, request, jsonify, send_from_directory
+import sys, os, json
+from flask import Flask, request, jsonify, send_from_directory, current_app
 
 # Update Python path if needed...
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -48,8 +48,9 @@ def get_player_state():
 
 @app.route("/api/get_actions", methods=["GET"])
 def get_actions():
-    actions = engine.get_possible_actions()
-    return jsonify({"actions": actions})
+    # Now returns a dictionary of 3 lists directly
+    actions_dict = engine.get_possible_actions()
+    return jsonify(actions_dict)
 
 @app.route("/api/apply_action", methods=["POST"])
 def apply_action():
@@ -65,5 +66,32 @@ def ask_question():
     answer = engine.answer_question(question)
     return jsonify({"answer": answer})
 
+@app.route("/api/map_data", methods=["GET"])
+def map_data():
+    try:
+        cursor = engine.db.cursor()
+        rows = cursor.execute("SELECT q, r, data_json FROM chunks").fetchall()
+        results = []
+        for row in rows:
+            try:
+                q = row[0]  # Using index instead of key
+                r = row[1]
+                chunk_json = json.loads(row[2])
+                results.append({
+                    "q": q,
+                    "r": r,
+                    "chunk_data": chunk_json
+                })
+            except Exception as e:
+                current_app.logger.error(f"Error processing row {row}: {e}")
+        return jsonify(results)
+    except Exception as e:
+        current_app.logger.error(f"Error in map_data: {e}")
+        return jsonify([]), 500
+
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8000)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--port', type=int, default=8000, help='Port to run the server on')
+    args = parser.parse_args()
+    app.run(debug=True, host="0.0.0.0", port=args.port)
