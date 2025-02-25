@@ -28,6 +28,62 @@ document.addEventListener("DOMContentLoaded", () => {
         "0,1":   { x:  HEX_SIZE * 0.5,    y:  HEX_SIZE * (sqrt3/2) },
     };
 
+    // Helper to get the hex corner points for intersection testing
+    function getHexCorners(cx, cy) {
+        const corners = [];
+        for (let i = 0; i < 6; i++) {
+            const angleDeg = 60 * i - 30;  // pointy top offset
+            const angleRad = (Math.PI / 180) * angleDeg;
+            corners.push({
+                x: cx + HEX_SIZE * Math.cos(angleRad),
+                y: cy + HEX_SIZE * Math.sin(angleRad)
+            });
+        }
+        return corners;
+    }
+
+    // Find the intersection with the correct hex edge
+    function findHexEdgeIntersection(x1, y1, x2, y2, cx, cy, dq, dr) {
+        // First, determine which edge we want based on direction
+        let startAngle;
+        if (dq === 1 && dr === 0) startAngle = -30;        // right edge
+        else if (dq === 1 && dr === -1) startAngle = -90;  // upper right edge
+        else if (dq === 0 && dr === -1) startAngle = -150; // upper left edge
+        else if (dq === -1 && dr === 0) startAngle = 150;  // left edge
+        else if (dq === -1 && dr === 1) startAngle = 90;   // lower left edge
+        else if (dq === 0 && dr === 1) startAngle = 30;    // lower right edge
+        else return null;
+
+        // Get the two corners of this edge
+        const angleRad1 = (Math.PI / 180) * startAngle;
+        const angleRad2 = (Math.PI / 180) * (startAngle + 60);
+        const x3 = cx + HEX_SIZE * Math.cos(angleRad1);
+        const y3 = cy + HEX_SIZE * Math.sin(angleRad1);
+        const x4 = cx + HEX_SIZE * Math.cos(angleRad2);
+        const y4 = cy + HEX_SIZE * Math.sin(angleRad2);
+
+        // Calculate the midpoint of this edge
+        const mx = (x3 + x4) / 2;
+        const my = (y3 + y4) / 2;
+
+        // Find intersection with this edge segment
+        const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (denominator === 0) return { x: mx, y: my }; // fallback to midpoint if parallel
+
+        const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator;
+        const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator;
+
+        // If intersection is on the edge segment, use it
+        if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+            const ix = x1 + t * (x2 - x1);
+            const iy = y1 + t * (y2 - y1);
+            return { x: ix, y: iy };
+        }
+
+        // Otherwise use the midpoint
+        return { x: mx, y: my };
+    };
+
     // Helper to get the “midpoint of the edge” for an exit in direction dq,dr
     function getEdgeMidpoint(cx, cy, dq, dr) {
         const key = `${dq},${dr}`;
@@ -207,8 +263,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Only draw visible locations
                 if (!locObj.visible) continue;
 
-                // pick a stable offset so location is inside the hex
-                const { dx, dy } = stableSubPosition(locName);
+                // Count how many visible locations we have and what number this one is
+                const visibleLocations = Object.entries(locations)
+                    .filter(([_, loc]) => loc.visible)
+                    .map(([name]) => name);
+                const index = visibleLocations.indexOf(locName);
+                const total = visibleLocations.length;
+
+                // Calculate position in a circular pattern
+                const angle = (2 * Math.PI * index) / total;
+                const radius = 0.6 * HEX_SIZE * sqrt3/2; // 60% of hex incircle
+                const dx = Math.cos(angle) * radius;
+                const dy = Math.sin(angle) * radius;
                 const lx = cx + dx;
                 const ly = cy + dy;
 
@@ -236,14 +302,23 @@ document.addEventListener("DOMContentLoaded", () => {
                         const dr = parseInt(rStr, 10);
                         console.log('Parsed exit deltas:', dq, dr);
 
-                        // Always draw line to edge midpoint for exits
-                        let edge = getEdgeMidpoint(cx, cy, dq, dr);
-                        console.log('Drawing line from', lx, ly, 'to', edge.x, edge.y);
-                        drawLine(ctx, lx, ly, edge.x, edge.y);
+                        // Calculate target point well outside the hex
+                        const targetX = cx + dq * HEX_SIZE * 2;
+                        const targetY = cy + dr * HEX_SIZE * 2;
+                        
+                        // Find intersection with the correct edge
+                        let intersection = findHexEdgeIntersection(lx, ly, targetX, targetY, cx, cy, dq, dr);
+                        if (intersection) {
+                            drawLine(ctx, lx, ly, intersection.x, intersection.y);
+                        }
                     } else if (locations[c] && locations[c].visible) {
                         // Connect to another visible location in same chunk
                         if (locName < c) {
-                            const { dx: tdx, dy: tdy } = stableSubPosition(c);
+                            // Use same circular pattern for connected location
+                            const index = visibleLocations.indexOf(c);
+                            const angle = (2 * Math.PI * index) / total;
+                            const tdx = Math.cos(angle) * radius;
+                            const tdy = Math.sin(angle) * radius;
                             const tx = cx + tdx;
                             const ty = cy + tdy;
                             drawLine(ctx, lx, ly, tx, ty);

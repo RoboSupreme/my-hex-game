@@ -11,7 +11,34 @@ This script resets the game world by:
 import os
 import sqlite3
 import json
+import signal
+import subprocess
 from datetime import datetime
+
+def cleanup_python_processes():
+    """Kill any existing Python processes that might be using port 8000"""
+    try:
+        # Find processes using port 8000
+        lsof = subprocess.run(['lsof', '-i', ':8000'], capture_output=True, text=True)
+        if lsof.stdout:
+            # Extract PIDs
+            pids = set()
+            for line in lsof.stdout.split('\n')[1:]:  # Skip header
+                if line.strip():
+                    parts = line.split()
+                    if len(parts) > 1:
+                        pids.add(int(parts[1]))
+            
+            # Kill processes
+            for pid in pids:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass  # Process already gone
+        
+        print("Cleaned up any existing Python processes")
+    except Exception as e:
+        print(f"Warning: Could not clean up processes: {e}")
 
 def create_tables(cur):
     # Create player table with all required columns
@@ -130,8 +157,8 @@ def create_starting_chunk():
             },
             "mystic_grove": {
                 "description": "A sacred grove, where ancient trees whisper secrets to those who dare to listen. The air is thick with the scent of incense and the sound of distant chanting.",
-                "visible": False,
-                "connections": ["exit:q+1,r+0"],
+                "visible": True,
+                "connections": ["forest"],
                 "sites": {
                     "altar": {
                         "description": "A stone altar, surrounded by flickering torches, where rituals and offerings are made to the unknown gods.",
@@ -158,7 +185,7 @@ def create_starting_chunk():
             },
             "ruined_castle": {
                 "description": "The remnants of a once-grand castle, now overgrown with ivy and shrouded in mystery. Its crumbling walls hide dark secrets and forgotten treasures.",
-                "visible": False,
+                "visible": True,
                 "connections": ["exit:q+0,r+1"],
                 "sites": {
                     "crypt": {
@@ -175,6 +202,9 @@ def create_starting_chunk():
 
 def reset_game(db_path="web/game.db"):
     """Reset the game by creating a new database with initial data"""
+    # Clean up any existing Python processes
+    cleanup_python_processes()
+    
     # Delete existing database if it exists
     if os.path.exists(db_path):
         os.remove(db_path)

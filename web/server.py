@@ -18,53 +18,69 @@ def index():
 
 @app.route("/api/get_player_state", methods=["GET"])
 def get_player_state():
-    p = engine.get_player_state()
+    try:
+        p = engine.get_player_state()
 
-    # Convert month numeric -> string if you wish
-    month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    month_str = month_names[(p['time_month']-1) % 12]
+        # Convert month numeric -> string if you wish
+        month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        month_str = month_names[(p['time_month']-1) % 12]
 
-    return jsonify({
-        "health": p["health"],
-        "money": p["money"],
-        "hunger": p["hunger"],
-        "energy": p["energy"],
-        "thirst": p["thirst"],
-        "alignment": p["alignment"],
-        "attack": p["attack"],
-        "defense": p["defense"],
-        "agility": p["agility"],
-        "location_name": p["location_name"],
-        "q": p["q"],
-        "r": p["r"],
-        "place_name": p["place_name"],
+        return jsonify({
+            "health": p["health"],
+            "money": p["money"],
+            "hunger": p["hunger"],
+            "energy": p["energy"],
+            "thirst": p["thirst"],
+            "alignment": p["alignment"],
+            "attack": p["attack"],
+            "defense": p["defense"],
+            "agility": p["agility"],
+            "location_name": p["location_name"],
+            "q": p["q"],
+            "r": p["r"],
+            "place_name": p["place_name"],
 
-        ### TIME FEATURE ADDED ###
-        "time_year": p["time_year"],
-        "time_month_str": month_str,
-        "time_day": p["time_day"],
-        "time_hour": p["time_hour"]
-    })
+            ### TIME FEATURE ADDED ###
+            "time_year": p["time_year"],
+            "time_month_str": month_str,
+            "time_day": p["time_day"],
+            "time_hour": p["time_hour"]
+        })
+    except Exception as e:
+        current_app.logger.exception("Error in get_player_state")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/get_actions", methods=["GET"])
 def get_actions():
-    # Now returns a dictionary of 3 lists directly
-    actions_dict = engine.get_possible_actions()
-    return jsonify(actions_dict)
+    try:
+        # Now returns a dictionary of 3 lists directly
+        actions_dict = engine.get_possible_actions()
+        return jsonify(actions_dict)
+    except Exception as e:
+        current_app.logger.exception("Error in get_actions")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/apply_action", methods=["POST"])
 def apply_action():
-    data = request.json
-    chosen_action = data.get("action", "")
-    result = engine.apply_action(chosen_action)
-    return jsonify({"result": result})
+    try:
+        data = request.json
+        chosen_action = data.get("action", "")
+        result = engine.apply_action(chosen_action)
+        return jsonify({"result": result})
+    except Exception as e:
+        current_app.logger.exception("Error in apply_action")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/ask_question", methods=["POST"])
 def ask_question():
-    data = request.json
-    question = data.get("question", "")
-    answer = engine.answer_question(question)
-    return jsonify({"answer": answer})
+    try:
+        data = request.json
+        question = data.get("question", "")
+        answer = engine.answer_question(question)
+        return jsonify({"answer": answer})
+    except Exception as e:
+        current_app.logger.exception("Error in ask_question")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/map_data", methods=["GET"])
 def map_data():
