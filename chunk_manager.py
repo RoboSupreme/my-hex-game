@@ -29,7 +29,8 @@ class ChunkManager:
          - If we have 2 neighbors => start from 40%, etc.
          - If we have >=6 neighbors => no more edges.
     5) Ensure all local locations in this chunk are mutually reachable (no isolated spots).
-    6) Pass final structure to AI to fill in "description", "sites", etc.
+    6) Generate unique names and backstories
+    7) Pass final structure to AI to fill in "description", "sites", etc.
     """
 
     def __init__(self, db: sqlite3.Connection, cohere_client: cohere.Client):
@@ -117,10 +118,10 @@ class ChunkManager:
         # STEP 5: Ensure local connectivity
         self._connect_local_locations(chunk_data)
 
-        # NEW STEP: Generate unique names and backstories
+        # STEP 6: Generate unique names and backstories
         chunk_data = self._generate_location_names_and_stories(q, r, chunk_data)
 
-        # STEP 6: Ask AI for descriptions, sites, etc.
+        # STEP 7: Ask AI for descriptions, sites, etc.
         final_chunk = self._generate_ai_descriptions(q, r, chunk_data)
 
         # Store in DB
@@ -257,34 +258,31 @@ class ChunkManager:
         
         # Now process each direction and create ONE connection per direction
         print(f"\n[DEBUG] Processing connections for chunk ({q},{r})")
+        # Inside _apply_neighbor_backlinks method
+        # Inside _apply_neighbor_backlinks method
         for dir_str, connecting_locs in connecting_by_dir.items():
             print(f"\n[DEBUG] Processing direction {dir_str} with locations: {connecting_locs}")
             # Try to connect one location for this direction
             connected = False
             
-            # First try to find a matching location name that isn't already connected
-            for nbr_loc in connecting_locs:
-                print(f"[DEBUG] Checking if we can connect {nbr_loc} to {dir_str}")
-                if nbr_loc in chunk_data["locations"]:
-                    current_conns = chunk_data["locations"][nbr_loc].get("connections", [])
-                    print(f"[DEBUG] Location {nbr_loc} exists and has connections: {current_conns}")
-                    if f"exit:{dir_str}" not in current_conns:
-                        # Perfect - matching name and not already connected to this direction
-                        chunk_data["locations"][nbr_loc]["connections"].append(f"exit:{dir_str}")
-                        edge_to_loc[dir_str] = nbr_loc
-                        print(f"[DEBUG] Connected matching location {nbr_loc} to {dir_str}")
-                        connected = True
-                        break
-                    else:
-                        print(f"[DEBUG] Location {nbr_loc} already connected to {dir_str}")
+            # Instead of matching names exactly, choose any available location
+            if connecting_locs:
+                available_locs = [
+                    ln for ln in chunk_data["locations"].keys()
+                    if f"exit:{dir_str}" not in chunk_data["locations"][ln].get("connections", [])
+                ]
+                if available_locs:
+                    chosen_loc = random.choice(available_locs)
+                    chunk_data["locations"][chosen_loc]["connections"].append(f"exit:{dir_str}")
+                    edge_to_loc[dir_str] = chosen_loc
+                    print(f"[DEBUG] Connected {chosen_loc} to {dir_str} based on neighbor data: {connecting_locs}")
+                    connected = True  # Mark as connected
                 else:
-                    print(f"[DEBUG] Location {nbr_loc} does not exist in our chunk")
+                    print(f"[DEBUG] No available location to connect for direction {dir_str}")
             
             # If we couldn't match any names, find any available location
             if not connected:
                 print(f"[DEBUG] No matching locations found, looking for any available location")
-                print(f"[DEBUG] Current chunk locations: {list(chunk_data['locations'].keys())}")
-                print(f"[DEBUG] Current connections: {[(loc, data.get('connections', [])) for loc, data in chunk_data['locations'].items()]}")
                 available_locs = [ln for ln in chunk_data["locations"].keys() 
                                 if f"exit:{dir_str}" not in chunk_data["locations"][ln].get("connections", [])]
                 print(f"[DEBUG] Available locations (no {dir_str} connection): {available_locs}")
@@ -293,7 +291,6 @@ class ChunkManager:
                     chunk_data["locations"][loc_name]["connections"].append(f"exit:{dir_str}")
                     edge_to_loc[dir_str] = loc_name
                     print(f"[DEBUG] Connected random location {loc_name} to {dir_str} for {connecting_locs}")
-                    print(f"[DEBUG] Location {loc_name} now has connections: {chunk_data['locations'][loc_name]['connections']}")
                 else:
                     print(f"[WARNING] No available locations to connect to {dir_str} for {connecting_locs}")
             
@@ -319,125 +316,59 @@ class ChunkManager:
         print(f"[DEBUG] Currently used edges: {used_edges}")
 
         # Get available directions and split into unexplored vs explored
+        # --- AFTER ---
+        # Get available directions: only count edges with no generated neighbor (unexplored edges)
         unexplored_dirs = []
-        explored_dirs = []
         for dir_str, dq, dr in HEX_NEIGHBORS:
             if dir_str in used_edges:
                 continue
-                
-            # Check if this neighbor exists in DB
             c = self.db.cursor()
             nq, nr = q + dq, r + dr
             exists = c.execute("SELECT 1 FROM chunks WHERE q=? AND r=?", (nq, nr)).fetchone()
-            
-            if exists:
-                explored_dirs.append(dir_str)
-            else:
+            if not exists:  # Only add if neighbor has NOT been generated
                 unexplored_dirs.append(dir_str)
-                
-        print(f"[DEBUG] Unexplored directions: {unexplored_dirs}")
-        print(f"[DEBUG] Explored directions: {explored_dirs}")
+        print(f"[DEBUG] Unexplored directions (no hex generated): {unexplored_dirs}")
 
-        # Probability sequence based on current connections
+        # Define probability sequence based solely on unexplored edges
         connected_count = len(used_edges)
         prob_map = {
-            1: [1.0, 0.50, 0.25, 0.125, 0.125],
-            2: [0.50, 0.25, 0.125, 0.125],
-            3: [0.25, 0.125, 0.125],
-            4: [0.125, 0.125],
-            5: [0.125]
+            1: [1.0, 0.80, 0.60, 0.40, 0.20],
+            2: [0.80, 0.60, 0.40, 0.20],
+            3: [0.60, 0.40, 0.20],
+            4: [0.40, 0.20],
+            5: [0.20]
         }
-        
         if connected_count >= 6:
             return
-            
+
         probs = prob_map[connected_count]
         print(f"[DEBUG] Using probability sequence: {probs}")
-        
-        # Try to make connections
+
+        # Try to add connections only for unexplored edges
         for prob in probs:
-            if random.random() >= (1.0 - prob):  # Now prob is chance to SUCCEED
-                print(f"[DEBUG] Passed probability check {prob}")
-                
-                # First try unexplored directions
-                if unexplored_dirs:
-                    chosen_dir = random.choice(unexplored_dirs)
-                    unexplored_dirs.remove(chosen_dir)
-                    
-                    # Pick a random location that doesn't already have an outgoing connection
-                    available_locs = [ln for ln in chunk_data["locations"].keys()
-                                    if ln not in edge_to_loc.values()]
-                    if available_locs:
-                        loc_name = random.choice(available_locs)
-                        chunk_data["locations"][loc_name]["connections"].append(f"exit:{chosen_dir}")
-                        used_edges.add(chosen_dir)
-                        edge_to_loc[chosen_dir] = loc_name
-                        print(f"[DEBUG] Added connection to unexplored: {loc_name} -> exit:{chosen_dir}")
-                        continue
-                    else:
-                        print(f"[DEBUG] No available locations for unexplored direction {chosen_dir}")
+            if not unexplored_dirs:
+                break  # No more unexplored edges to process
+            if random.random() >= (1.0 - prob):  # Check probability
+                chosen_dir = random.choice(unexplored_dirs)
+                unexplored_dirs.remove(chosen_dir)
+                # Choose a random location in the chunk that doesn't already have an exit for this direction
+                available_locs = [
+                    ln for ln in chunk_data["locations"].keys()
+                    if f"exit:{chosen_dir}" not in chunk_data["locations"][ln].get("connections", [])
+                ]
+                if available_locs:
+                    loc_name = random.choice(available_locs)
+                    chunk_data["locations"][loc_name]["connections"].append(f"exit:{chosen_dir}")
+                    used_edges.add(chosen_dir)
+                    edge_to_loc[chosen_dir] = loc_name
+                    print(f"[DEBUG] Added connection to unexplored: {loc_name} -> exit:{chosen_dir}")
+                else:
+                    print(f"[DEBUG] No available location for unexplored direction {chosen_dir}")
             else:
-                print(f"[DEBUG] Failed probability check {prob}, stopping")
-                break
+                print(f"[DEBUG] Failed probability check {prob} for unexplored edges, continuing")
+
             
-            # If no unexplored dirs, try explored ones
-            if explored_dirs:
-                chosen_dir = random.choice(explored_dirs)
-                explored_dirs.remove(chosen_dir)
-                
-                # Get the neighbor's data
-                dq = int(chosen_dir.split(',')[0][1:]) if '+' in chosen_dir.split(',')[0] else -int(chosen_dir.split(',')[0][1:])
-                dr = int(chosen_dir.split(',')[1][1:]) if '+' in chosen_dir.split(',')[1] else -int(chosen_dir.split(',')[1][1:])
-                nq, nr = q + dq, r + dr
-                
-                neighbor_data = json.loads(c.execute(
-                    "SELECT data_json FROM chunks WHERE q=? AND r=?", 
-                    (nq, nr)
-                ).fetchone()["data_json"])
-                
-                # Check if any location in neighbor points to us
-                back_dir = self._flip_direction(chosen_dir)
-                back_exit = f"exit:{back_dir}"
-                
-                # First find ALL locations in neighbor that point to us
-                connecting_locs = []
-                for nbr_loc, nbr_data in neighbor_data["locations"].items():
-                    if back_exit in nbr_data.get("connections", []):
-                        connecting_locs.append(nbr_loc)
-                
-                print(f"[DEBUG] Found {len(connecting_locs)} locations in {chosen_dir} pointing to us: {connecting_locs}")
-                
-                # Try each location in order
-                connecting_loc = None
-                
-                # Try to connect each location that points to us
-                for nbr_loc in connecting_locs:
-                    connecting_loc = None
-                    
-                    # First try to match name if it exists and isn't already connected
-                    if nbr_loc in chunk_data["locations"] and \
-                       f"exit:{chosen_dir}" not in chunk_data["locations"][nbr_loc].get("connections", []):
-                        connecting_loc = nbr_loc
-                        print(f"[DEBUG] Found matching location name {connecting_loc} from {nbr_loc}")
-                    
-                    # If no matching name works, pick a random available location
-                    if not connecting_loc:
-                        available_locs = [ln for ln in chunk_data["locations"].keys()
-                                        if f"exit:{chosen_dir}" not in chunk_data["locations"][ln].get("connections", [])]
-                        if available_locs:
-                            connecting_loc = random.choice(available_locs)
-                            print(f"[DEBUG] Using random location {connecting_loc} for connection to match {nbr_loc}")
-                    
-                    if connecting_loc:
-                        chunk_data["locations"][connecting_loc]["connections"].append(f"exit:{chosen_dir}")
-                        used_edges.add(chosen_dir)
-                        edge_to_loc[chosen_dir] = connecting_loc
-                        print(f"[DEBUG] Added connection to explored: {connecting_loc} -> exit:{chosen_dir} to match {nbr_loc}")
-                    else:
-                        print(f"[DEBUG] Could not find an available location for connection to {chosen_dir} to match {nbr_loc}")
             
-            # If we get here, we couldn't make any more connections
-            break
 
     # ----------------------------------------------------------------------
     #  Step 5: ensure local connectivity (no location is isolated)
@@ -501,7 +432,7 @@ class ChunkManager:
     # ----------------------------------------------------------------------
     #  Step 6: Pass final structure to AI to fill in descriptions, sites, etc.
     # ----------------------------------------------------------------------
-    def _generate_ai_descriptions(self, q: int, r: int, chunk_data: Dict[str,Any]) -> Dict[str,Any]:
+    def _generate_ai_descriptions(self, q: int, r: int, chunk_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Asks AI to fill in:
           - "description"
@@ -512,25 +443,59 @@ class ChunkManager:
         """
         loc_names = list(chunk_data["locations"].keys())
         placeholders = []
+        
+        # Include existing details (backstories, etc.) for context
         for ln in loc_names:
-            conns = chunk_data["locations"][ln]["connections"]
-            placeholders.append(f'  "{ln}": {{ "connections": {conns} }}')
-        base_str = "{\n" + ",\n".join(placeholders) + "\n}"
+            loc_data = chunk_data["locations"][ln]
+            connections = loc_data.get("connections", [])
+            backstory = loc_data.get("backstory", "")
+            notable_features = loc_data.get("notable_features", [])
+            
+            placeholder = {
+                "name": ln,
+                "connections": connections,
+                "backstory": backstory,
+                "notable_features": notable_features
+            }
+            placeholders.append(placeholder)
+            
+        # Calculate distance from origin to determine characteristics 
+        distance_from_origin = abs(q) + abs(r)
+        region_type = "central"
+        if distance_from_origin > 3 and distance_from_origin <= 6:
+            region_type = "midlands"
+        elif distance_from_origin > 6:
+            region_type = "frontier"
+            
+        # Determine biome based on coordinates (simplified algorithm)
+        angle = 0 if q == 0 and r == 0 else (((q + r) * 60) % 360)
+        biomes = ["forest", "mountains", "plains", "desert", "swamp", "tundra"]
+        biome_index = int(angle / 60) % len(biomes)
+        primary_biome = biomes[biome_index]
+        
+        # Check if any locations are secret
+        has_secret_locations = any(ln.startswith("Secret") for ln in loc_names)
 
         system_prompt = f"""
-We have a new chunk at (q={q}, r={r}) with these location placeholders:
+We have a new chunk at (q={q}, r={r}) with these locations:
 
-{base_str}
+{json.dumps(placeholders, indent=2)}
+
+The chunk is in a {primary_biome} biome in the {region_type} region, {distance_from_origin} hexes from the origin.
 
 For each location, fill in:
-  "description": short text
-  "visible": true
-  "history_of_events": []
-  "sites": dictionary with 0-2 sites, each site must have "discovered": true
+  "description": A vivid 1-2 sentence description of what travelers see here
+  "visible": true (or false for secret locations)
+  "history_of_events": [] (leave empty for now)
+  "sites": A dictionary with 1-3 sites, where each site must have:
+    - "discovered": true
+    - "description": A brief description of the site
+    - Site names should be thematic and tie into the location's backstory and notable features
+
 Keep connections exactly the same. Return valid JSON of form:
 {{
   "locations": {{
-    "LocName": {{
+    "LocationName": {{
       "visible": true,
       "description": "...",
       "history_of_events": [],
@@ -544,14 +509,18 @@ Keep connections exactly the same. Return valid JSON of form:
           "description": "..."
         }}
       }},
-      "connections": [...]
+      "connections": [...],
+      "backstory": "...",  // preserve the existing backstory
+      "notable_features": [...]  // preserve the existing notable features
     }},
     ...
   }}
 }}
+
+Make secret locations (if any) have "visible": false, and give them more mysterious sites.
 No extra commentary, just JSON.
 """
-        user_prompt = "Please fill in those fields for each location."
+        user_prompt = "Please fill in those fields for each location, maintaining consistency with the backstories and notable features."
 
         try:
             resp = self.ai.chat(
@@ -561,15 +530,32 @@ No extra commentary, just JSON.
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=1000
+                max_tokens=1500
             )
             raw_json = resp.message.content[0].text.strip()
-            new_chunk = json.loads(raw_json)
             
-            # Ensure each location has proper structure
+            # Try to find JSON in the response
+            json_start = raw_json.find('{')
+            json_end = raw_json.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                json_str = raw_json[json_start:json_end]
+                new_chunk = json.loads(json_str)
+            else:
+                print(f"[WARN] Could not find JSON in AI response: {raw_json}")
+                raise ValueError("No JSON found in response")
+            
+            # Ensure each location has proper structure and preserves existing data
             for ln, loc_data in new_chunk["locations"].items():
                 # Keep original connections
-                loc_data["connections"] = chunk_data["locations"][ln]["connections"]
+                if ln in chunk_data["locations"]:
+                    loc_data["connections"] = chunk_data["locations"][ln]["connections"]
+                    
+                    # Preserve backstory and notable_features if they exist in the original
+                    if "backstory" in chunk_data["locations"][ln]:
+                        loc_data["backstory"] = chunk_data["locations"][ln]["backstory"]
+                    if "notable_features" in chunk_data["locations"][ln]:
+                        loc_data["notable_features"] = chunk_data["locations"][ln]["notable_features"]
+                
                 # Ensure sites is a dict with proper structure
                 sites = loc_data.get("sites", {})
                 if not isinstance(sites, dict):
@@ -587,8 +573,13 @@ No extra commentary, just JSON.
                         site_data["description"] = f"A site called {site_name}"
                         
                 loc_data["sites"] = sites
+                
                 # Ensure other required fields
-                loc_data["visible"] = True
+                if ln.startswith("Secret"):
+                    loc_data["visible"] = False
+                else:
+                    loc_data["visible"] = True
+                    
                 if "description" not in loc_data:
                     loc_data["description"] = f"A default location named {ln}"
                 if "history_of_events" not in loc_data:
@@ -600,7 +591,7 @@ No extra commentary, just JSON.
             # fallback: fill with defaults
             for ln in loc_names:
                 chunk_data["locations"][ln].update({
-                    "visible": True,
+                    "visible": not ln.startswith("Secret"),
                     "description": f"A default location named {ln}",
                     "history_of_events": [],
                     "sites": {}
@@ -621,28 +612,77 @@ No extra commentary, just JSON.
                 "connections": loc_data["connections"]
             })
 
-        system_prompt = """You are generating unique names and rich backstories for locations in a fantasy game world.
+        # Get information about neighboring chunks for context
+        neighbor_context = []
+        neighbors = self.get_neighbor_data(q, r)
+        for dir_str, neighbor_data in neighbors.items():
+            if neighbor_data.get("locations"):
+                loc_names = list(neighbor_data.get("locations", {}).keys())
+                if loc_names:
+                    neighbor_context.append({
+                        "direction": dir_str,
+                        "location_names": loc_names
+                    })
+
+        # Calculate distance from origin to determine region characteristics
+        distance_from_origin = abs(q) + abs(r)
+        region_type = "central"
+        if distance_from_origin > 3 and distance_from_origin <= 6:
+            region_type = "midlands"
+        elif distance_from_origin > 6:
+            region_type = "frontier"
+            
+        # Determine biome based on coordinates (simplified algorithm)
+        # This creates roughly wedge-shaped regions around the origin
+        angle = 0 if q == 0 and r == 0 else (((q + r) * 60) % 360)
+        biomes = ["forest", "mountains", "plains", "desert", "swamp", "tundra"]
+        biome_index = int(angle / 60) % len(biomes)
+        primary_biome = biomes[biome_index]
+        
+        # Create more context for the AI
+        context = {
+            "chunk_coordinates": {"q": q, "r": r},
+            "distance_from_origin": distance_from_origin,
+            "region_type": region_type,
+            "primary_biome": primary_biome,
+            "neighboring_chunks": neighbor_context,
+            "total_locations": len(locations),
+            "has_secret_locations": any(loc["is_secret"] for loc in locations)
+        }
+
+        system_prompt = f"""You are generating unique names and rich backstories for locations in a fantasy game world.
 IMPORTANT: You must respond with ONLY valid JSON, no other text.
 
+The chunk is located at coordinates (q={q}, r={r}) in a hex-based world.
+Primary biome: {primary_biome}
+Region type: {region_type}
+Distance from origin: {distance_from_origin} hexes
+
 For each location in this list, generate:
-1. A unique and thematic name (e.g. "Whispering Woods", "Thornhaven Village")
-2. A rich backstory explaining its history
-3. Current state description
-4. Notable features
+1. A unique and thematic name that reflects the biome and region (e.g. "Whispering Woods", "Thornhaven Village")
+2. A rich backstory explaining its history (2-3 sentences)
+3. Current state description (1-2 sentences)
+4. Notable features (2-4 items)
+
+Names should be immersive and varied. Secret locations should have mysterious or hidden-sounding names.
+The backstory should tie into the biome and region characteristics.
 
 Example response format:
-{
-  "LocationA": {
+{{
+  "LocationA": {{
     "new_name": "Whispering Woods",
     "backstory": "Long ago, these woods were home to an ancient order of druids...",
     "current_state": "Now, the whispers of the past still echo...",
     "notable_features": ["The Speaking Stones", "The Elder Grove", "The Moonlit Pool"]
-  }
-}
+  }}
+}}
 
 Current locations to rename:"""
 
-        user_prompt = json.dumps(locations, indent=2)
+        user_prompt = json.dumps({
+            "locations": locations,
+            "context": context
+        }, indent=2)
 
         try:
             resp = self.ai.chat(
@@ -691,10 +731,11 @@ Current locations to rename:"""
                     new_connections = []
                     for conn in loc_data["connections"]:
                         if conn.startswith("exit:"):
-                            new_connections.append(conn)  # Keep exit connections as is
+                            new_connections.append(conn)  
                         else:
-                            # Update connection to use new name if it exists in our mapping
-                            new_connections.append(name_mapping.get(conn, conn))
+                            new_conn = name_mapping.get(conn, conn)
+                            new_connections.append(new_conn)
+                    
                     loc_data["connections"] = new_connections
                     
                     # Store under the new name

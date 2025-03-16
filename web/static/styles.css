@@ -216,7 +216,6 @@ h3 {
 #questionInput:focus {
     border-color: var(--primary-color);
     outline: none;
-}
     border-radius: var(--border-radius);
     min-height: 50px;
 }
